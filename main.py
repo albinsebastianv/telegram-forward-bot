@@ -11,9 +11,9 @@ destination = int(os.environ['DESTINATION'])
 client = TelegramClient('session', api_id, api_hash)
 
 # SETTINGS
-BATCH_SIZE = 40          # 30–50 (you can change)
-DELAY_BETWEEN_BATCH = 1800   # 30 minutes (in seconds)
-DELAY_BETWEEN_MSG = 10       # delay between each video
+BATCH_SIZE = 40                # 30–50 recommended
+DELAY_BETWEEN_BATCH = 1800    # 30 minutes
+DELAY_BETWEEN_MSG = 10        # 10 seconds between each video
 
 async def forward_old_videos():
     print("Starting old video forwarding...")
@@ -32,12 +32,13 @@ async def forward_old_videos():
 
         for msg in batch:
             try:
-                await client.send_file(destination, msg.video, caption=msg.text)
+                file = await msg.download_media()
+                await client.send_file(destination, file, caption=msg.text)
                 await asyncio.sleep(DELAY_BETWEEN_MSG)
             except Exception as e:
                 print("Error:", e)
 
-        print("Batch done. Waiting...")
+        print("Batch done. Waiting before next batch...")
         await asyncio.sleep(DELAY_BETWEEN_BATCH)
 
     print("Old videos forwarding completed!")
@@ -46,7 +47,8 @@ async def forward_old_videos():
 async def handler(event):
     if event.message.video:
         try:
-            await client.send_file(destination, event.message.video, caption=event.message.text)
+            file = await event.message.download_media()
+            await client.send_file(destination, file, caption=event.message.text)
         except Exception as e:
             print("Error:", e)
 
