@@ -43,13 +43,16 @@ async def forward_old_videos():
         while True:
             try:
                 async for msg in client.iter_messages(src, reverse=True):
-                    
-                    # Skip already processed
+
                     if msg.id <= last_id:
                         continue
 
                     if msg.video:
                         try:
+                            if not client.is_connected():
+                                print("Reconnecting...")
+                                await client.connect()
+
                             print(f"Downloading video ID {msg.id}...")
                             file = await msg.download_media()
 
@@ -91,6 +94,10 @@ async def forward_old_videos():
 async def handler(event):
     if event.message.video:
         try:
+            if not client.is_connected():
+                print("Reconnecting...")
+                await client.connect()
+
             print("New video detected")
 
             file = await event.message.download_media()
@@ -118,7 +125,16 @@ async def handler(event):
 async def main():
     print("Bot started!")
 
-    await client.send_message(destination, "Hi, bot started ✅")
+    await client.connect()
+
+    if not await client.is_user_authorized():
+        print("Session not authorized!")
+        return
+
+    try:
+        await client.send_message(destination, "Hi, bot started ✅")
+    except Exception as e:
+        print("Test message error:", e)
 
     await forward_old_videos()
 
