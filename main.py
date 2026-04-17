@@ -11,47 +11,34 @@ destination = int(os.environ['DESTINATION'])
 client = TelegramClient('session', api_id, api_hash)
 
 # SETTINGS
-BATCH_SIZE = 40
-DELAY_BETWEEN_BATCH = 1800   # 30 minutes
-DELAY_BETWEEN_MSG = 10       # 10 seconds
+DELAY_BETWEEN_MSG = 25   # seconds (safe)
 
 async def forward_old_videos():
     print("Starting old video forwarding...")
 
-    videos = []
+    count = 0
+
     async for msg in client.iter_messages(source, reverse=True):
         if msg.video:
-            videos.append(msg)
-
-    print(f"Total videos found: {len(videos)}")
-
-    for i in range(0, len(videos), BATCH_SIZE):
-        batch = videos[i:i+BATCH_SIZE]
-
-        print(f"Sending batch {i//BATCH_SIZE + 1}")
-
-        for msg in batch:
             try:
                 print("Downloading video...")
                 file = await msg.download_media()
-                print("Downloaded file path:", file)
+                print("Downloaded:", file)
 
                 if not file:
                     print("Download failed, skipping...")
                     continue
 
-                print("Sending video to destination:", destination)
+                print("Sending video...")
                 await client.send_file(destination, file, caption=msg.text)
 
-                print("Sent successfully!")
+                count += 1
+                print(f"Sent video #{count}")
 
                 await asyncio.sleep(DELAY_BETWEEN_MSG)
 
             except Exception as e:
-                print("Error while sending:", e)
-
-        print("Batch done. Waiting before next batch...")
-        await asyncio.sleep(DELAY_BETWEEN_BATCH)
+                print("Error:", e)
 
     print("Old videos forwarding completed!")
 
@@ -65,7 +52,7 @@ async def handler(event):
             print("Downloaded new video:", file)
 
             if not file:
-                print("Download failed for new video")
+                print("Download failed")
                 return
 
             await client.send_file(destination, file, caption=event.message.text)
@@ -73,10 +60,17 @@ async def handler(event):
             print("New video sent!")
 
         except Exception as e:
-            print("Error in new video handler:", e)
+            print("Error:", e)
 
 async def main():
+    print("Bot started!")
+
+    # ✅ Test message
+    await client.send_message(destination, "Hi, bot started ✅")
+
+    # Start forwarding
     await forward_old_videos()
+
     print("Now listening for new videos...")
 
 with client:
