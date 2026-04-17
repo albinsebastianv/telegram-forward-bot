@@ -2,22 +2,23 @@ import os
 import asyncio
 import json
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 
+# --- CONFIG --- #
 api_id = int(os.environ['API_ID'])
 api_hash = os.environ['API_HASH']
+session_string = os.environ['SESSION']
 
 sources = [int(x.strip()) for x in os.environ['SOURCE'].split(',')]
 destination = int(os.environ['DESTINATION'])
 
-client = TelegramClient('session', api_id, api_hash)
+client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
 # SETTINGS
-DELAY_BETWEEN_MSG = 40  # safer delay
-
+DELAY_BETWEEN_MSG = 40  # seconds (safe)
 PROGRESS_FILE = "progress.json"
 
-# ---------------- LOAD / SAVE PROGRESS ---------------- #
-
+# --- LOAD / SAVE PROGRESS --- #
 def load_progress():
     if os.path.exists(PROGRESS_FILE):
         with open(PROGRESS_FILE, "r") as f:
@@ -28,16 +29,13 @@ def save_progress(data):
     with open(PROGRESS_FILE, "w") as f:
         json.dump(data, f)
 
-# ---------------- OLD VIDEOS ---------------- #
-
+# --- FORWARD OLD VIDEOS --- #
 async def forward_old_videos():
     print("Starting old video forwarding...")
-
     progress = load_progress()
 
     for src in sources:
         print(f"Processing source: {src}")
-
         last_id = progress.get(str(src), 0)
 
         while True:
@@ -71,7 +69,6 @@ async def forward_old_videos():
 
                             print(f"Sent video ID {msg.id}")
 
-                            # Save progress
                             progress[str(src)] = msg.id
                             save_progress(progress)
 
@@ -88,8 +85,7 @@ async def forward_old_videos():
 
     print("Old videos forwarding completed!")
 
-# ---------------- NEW VIDEOS ---------------- #
-
+# --- NEW VIDEOS --- #
 @client.on(events.NewMessage(chats=sources))
 async def handler(event):
     if event.message.video:
@@ -101,7 +97,6 @@ async def handler(event):
             print("New video detected")
 
             file = await event.message.download_media()
-
             if not file:
                 return
 
@@ -120,8 +115,7 @@ async def handler(event):
         except Exception as e:
             print("Error in new handler:", e)
 
-# ---------------- MAIN ---------------- #
-
+# --- MAIN --- #
 async def main():
     print("Bot started!")
 
