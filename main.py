@@ -1,49 +1,61 @@
 import os
 import asyncio
-import json
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
-# --- CONFIG --- #
+# =========================
+# TELEGRAM API CONFIG
+# =========================
+
 api_id = int(os.environ['API_ID'])
 api_hash = os.environ['API_HASH']
 session_string = os.environ['SESSION']
 
-sources = [int(x.strip()) for x in os.environ['SOURCE'].split(',')]
 destination = int(os.environ['DESTINATION'])
 
-client = TelegramClient(StringSession(session_string), api_id, api_hash)
+client = TelegramClient(
+    StringSession(session_string),
+    api_id,
+    api_hash
+)
 
+# =========================
 # SETTINGS
-DELAY_BETWEEN_MSG = 40  # seconds (safe)
-PROGRESS_FILE = "progress.json"
+# =========================
 
-# --- LOAD / SAVE PROGRESS --- #
-def load_progress():
-    if os.path.exists(PROGRESS_FILE):
-        with open(PROGRESS_FILE, "r") as f:
-            return json.load(f)
-    return {}
+DELAY_BETWEEN_MSG = 45  # safer delay (seconds)
 
-def save_progress(data):
-    with open(PROGRESS_FILE, "w") as f:
-        json.dump(data, f)
+# =========================
+# SOURCE GROUPS CONTROL
+# =========================
 
-# --- FORWARD OLD VIDEOS --- #
+# These groups will send ALL old videos from beginning
+FULL_HISTORY_SOURCES = [
+    -1002835976219,
+]
+
+# These groups will SKIP old videos
+# and only send NEW videos from now onward
+NEW_ONLY_SOURCES = [
+    -1002206382201,
+]
+
+# Combined list for new incoming video monitoring
+ALL_SOURCES = FULL_HISTORY_SOURCES + NEW_ONLY_SOURCES
+
+# =========================
+# FORWARD OLD VIDEOS
+# =========================
+
 async def forward_old_videos():
     print("Starting old video forwarding...")
-    progress = load_progress()
 
-    for src in sources:
-        print(f"Processing source: {src}")
-        last_id = progress.get(str(src), 0)
+    for src in FULL_HISTORY_SOURCES:
+        print(f"Processing FULL history source: {src}")
 
         while True:
             try:
                 async for msg in client.iter_messages(src, reverse=True):
-
-                    if msg.id <= last_id:
-                        continue
 
                     if msg.video:
                         try:
@@ -51,7 +63,7 @@ async def forward_old_videos():
                                 print("Reconnecting...")
                                 await client.connect()
 
-                            print(f"Downloading video ID {msg.id}...")
+                            print(f"Downloading old video ID {msg.id}...")
                             file = await msg.download_media()
 
                             if not file:
@@ -67,10 +79,7 @@ async def forward_old_videos():
                                 supports_streaming=True
                             )
 
-                            print(f"Sent video ID {msg.id}")
-
-                            progress[str(src)] = msg.id
-                            save_progress(progress)
+                            print(f"Sent old video ID {msg.id}")
 
                             await asyncio.sleep(DELAY_BETWEEN_MSG)
 
@@ -83,10 +92,13 @@ async def forward_old_videos():
                 print("Retrying due to error:", e)
                 await asyncio.sleep(10)
 
-    print("Old videos forwarding completed!")
+    print("Old video forwarding completed!")
 
-# --- NEW VIDEOS --- #
-@client.on(events.NewMessage(chats=sources))
+# =========================
+# NEW VIDEOS ONLY
+# =========================
+
+@client.on(events.NewMessage(chats=ALL_SOURCES))
 async def handler(event):
     if event.message.video:
         try:
@@ -97,6 +109,7 @@ async def handler(event):
             print("New video detected")
 
             file = await event.message.download_media()
+
             if not file:
                 return
 
@@ -115,7 +128,10 @@ async def handler(event):
         except Exception as e:
             print("Error in new handler:", e)
 
-# --- MAIN --- #
+# =========================
+# MAIN
+# =========================
+
 async def main():
     print("Bot started!")
 
@@ -126,13 +142,16 @@ async def main():
         return
 
     try:
-        await client.send_message(destination, "Hi, bot started ✅")
+        await client.send_message(
+            destination,
+            "Hi, bot started ✅"
+        )
     except Exception as e:
         print("Test message error:", e)
 
     await forward_old_videos()
 
-    print("Now listening for new videos...")
+    print("Now listening for new videos only...")
 
 with client:
     client.loop.run_until_complete(main())
